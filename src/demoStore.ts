@@ -10,6 +10,7 @@ export interface DemoUser {
   email: string
   goldGrams: number
   status: UserStatus
+  verified: boolean
 }
 
 export interface DemoShop {
@@ -35,7 +36,7 @@ export interface PendingOrder {
 export interface ActivityItem {
   id: string
   userId: number
-  type: 'buy' | 'redeem' | 'cashout' | 'approved' | 'rejected'
+  type: 'buy' | 'redeem' | 'cashout' | 'approved' | 'rejected' | 'admin'
   title: string
   detail: string
   amountLabel: string
@@ -99,6 +100,7 @@ export function createInitialState(): RanDemoState {
         email: 'aisha@ran.app',
         goldGrams: 0.845,
         status: 'Active',
+        verified: true,
       },
       {
         id: 2,
@@ -106,6 +108,7 @@ export function createInitialState(): RanDemoState {
         email: 'maya@ran.app',
         goldGrams: 1.2,
         status: 'Active',
+        verified: true,
       },
       {
         id: 3,
@@ -113,6 +116,7 @@ export function createInitialState(): RanDemoState {
         email: 'arjun@ran.app',
         goldGrams: 1.0,
         status: 'Active',
+        verified: true,
       },
       {
         id: 4,
@@ -120,6 +124,7 @@ export function createInitialState(): RanDemoState {
         email: 'sana@ran.app',
         goldGrams: 0.84,
         status: 'Suspended',
+        verified: false,
       },
     ],
     shops: [
@@ -222,9 +227,14 @@ function loadState(): RanDemoState {
     if (!parsed.settings || !Array.isArray(parsed.users) || !Array.isArray(parsed.shops)) {
       return createInitialState()
     }
+    const base = createInitialState()
     return {
-      ...createInitialState(),
+      ...base,
       ...parsed,
+      users: parsed.users.map(user => ({
+        ...user,
+        verified: typeof user.verified === 'boolean' ? user.verified : true,
+      })),
     }
   } catch {
     return createInitialState()
@@ -287,6 +297,7 @@ export function useRanDemoStore() {
     email: string,
     initialGold = 0,
     switchToNewUser = false,
+    verified = false,
   ): ActionResult => {
     const cleanName = name.trim()
     const cleanEmail = email.trim().toLowerCase()
@@ -311,6 +322,7 @@ export function useRanDemoStore() {
           email: cleanEmail,
           goldGrams: Math.max(0, initialGold),
           status: 'Active',
+          verified,
         },
       ],
       notifications: [
@@ -318,7 +330,9 @@ export function useRanDemoStore() {
           id: `notif-${newId}`,
           userId: newId,
           title: `Welcome to Ran, ${cleanName.split(' ')[0]}!`,
-          detail: 'Start investing in digital gold from Rs. 20.',
+          detail: verified
+            ? 'Your account is verified. Start investing in digital gold from Rs. 20.'
+            : 'Your account is awaiting Admin verification for Gold Shop redemptions.',
           timestamp: time,
           read: false,
         },
@@ -439,6 +453,12 @@ export function useRanDemoStore() {
     const currentUser = getCurrentUser(state)
     if (currentUser.status === 'Suspended') {
       return { ok: false, message: 'Account is suspended by admin.' }
+    }
+    if (!currentUser.verified) {
+      return {
+        ok: false,
+        message: 'Account verification required. Verify this user in Admin → Users before redeeming.',
+      }
     }
     if (!shopName) {
       return { ok: false, message: 'Select a partner gold shop.' }
@@ -623,21 +643,180 @@ export function useRanDemoStore() {
   }
 
   const toggleUserStatus = (id: number) => {
+    const target = state.users.find(user => user.id === id)
+    if (!target) return
+    const nextStatus: UserStatus = target.status === 'Active' ? 'Suspended' : 'Active'
+    const time = nowLabel()
+
+    commit(prev => ({
+      ...prev,
+      users: prev.users.map(user =>
+        user.id === id ? { ...user, status: nextStatus } : user,
+      ),
+      notifications: [
+        {
+          id: `notif-${Date.now()}`,
+          userId: id,
+          title: nextStatus === 'Active' ? 'Account activated' : 'Account suspended',
+          detail:
+            nextStatus === 'Active'
+              ? 'Admin activated your wallet access.'
+              : 'Admin suspended your wallet access.',
+          timestamp: time,
+          read: false,
+        },
+        ...prev.notifications,
+      ],
+    }))
+  }
+
+  const toggleUserVerified = (id: number): ActionResult => {
+    const target = state.users.find(user => user.id === id)
+    if (!target) return { ok: false, message: 'User not found.' }
+    const nextVerified = !target.verified
+    const time = nowLabel()
+
+    commit(prev => ({
+      ...prev,
+      users: prev.users.map(user =>
+        user.id === id ? { ...user, verified: nextVerified } : user,
+      ),
+      notifications: [
+        {
+          id: `notif-${Date.now()}`,
+          userId: id,
+          title: nextVerified ? 'Account verified by Admin' : 'Verification removed by Admin',
+          detail: nextVerified
+            ? 'Your KYC is verified — Gold Shop redemptions are now unlocked.'
+            : 'Your account verification was revoked by Admin.',
+          timestamp: time,
+          read: false,
+        },
+        ...prev.notifications,
+      ],
+    }))
+
+    return {
+      ok: true,
+      message: nextVerified
+        ? `${target.name} is now verified.`
+        : `Verification removed for ${target.name}.`,
+    }
+  }
+
+  const updateUser = (
+    id: number,
+    updates: {
+      name: string
+      email: string
+      goldGrams: number
+      status: UserStatus
+      verified: boolean
+    },
+  ): ActionResult => {
+    const existing = state.users.find(user => user.id === id)
+    if (!existing) return { ok: false, message: 'User not found.' }
+
+    const cleanName = updates.name.trim()
+    const cleanEmail = updates.email.trim().toLowerCase()
+    if (!cleanName || !cleanEmail) {
+      return { ok: false, message: 'Full name and email address are required.' }
+    }
+    if (
+      state.users.some(
+        user => user.id !== id && user.email.toLowerCase() === cleanEmail,
+      )
+    ) {
+      return { ok: false, message: 'Another user already uses that email address.' }
+    }
+    if (!Number.isFinite(updates.goldGrams) || updates.goldGrams < 0) {
+      return { ok: false, message: 'Gold balance must be 0 or greater.' }
+    }
+
+    const delta = updates.goldGrams - existing.goldGrams
+    const time = nowLabel()
+
     commit(prev => ({
       ...prev,
       users: prev.users.map(user =>
         user.id === id
-          ? { ...user, status: user.status === 'Active' ? 'Suspended' : 'Active' }
+          ? {
+              ...user,
+              name: cleanName,
+              email: cleanEmail,
+              goldGrams: Number(updates.goldGrams.toFixed(4)),
+              status: updates.status,
+              verified: updates.verified,
+            }
           : user,
       ),
+      pending: prev.pending.map(order =>
+        order.userId === id ? { ...order, user: cleanName } : order,
+      ),
+      activities:
+        Math.abs(delta) > 0.00005
+          ? [
+              {
+                id: `act-${Date.now()}`,
+                userId: id,
+                type: 'admin',
+                title: 'Admin balance adjustment',
+                detail: `Updated wallet to ${updates.goldGrams.toFixed(4)}g`,
+                amountLabel: `${delta >= 0 ? '+' : ''}${delta.toFixed(4)}g`,
+                timestamp: time,
+              },
+              ...prev.activities,
+            ]
+          : prev.activities,
+      notifications: [
+        {
+          id: `notif-${Date.now()}`,
+          userId: id,
+          title: 'Account updated by Admin',
+          detail: `Status: ${updates.status} · ${updates.verified ? 'Verified' : 'Unverified'} · Balance: ${updates.goldGrams.toFixed(4)}g`,
+          timestamp: time,
+          read: false,
+        },
+        ...prev.notifications,
+      ],
     }))
+
+    return { ok: true, message: `Updated ${cleanName}'s account details.` }
   }
 
-  const addUser = (name: string, email: string, initialGold = 0): ActionResult =>
-    createNewUser(name, email, initialGold, false)
+  const deleteUser = (id: number): ActionResult => {
+    if (state.users.length <= 1) {
+      return { ok: false, message: 'At least one user account must remain in the demo.' }
+    }
+    const target = state.users.find(user => user.id === id)
+    if (!target) return { ok: false, message: 'User not found.' }
 
-  const registerAndSwitchUser = (name: string, email: string, initialGold = 0): ActionResult =>
-    createNewUser(name, email, initialGold, true)
+    commit(prev => {
+      const remainingUsers = prev.users.filter(user => user.id !== id)
+      return {
+        ...prev,
+        currentUserId:
+          prev.currentUserId === id ? remainingUsers[0].id : prev.currentUserId,
+        users: remainingUsers,
+        pending: prev.pending.filter(order => order.userId !== id),
+      }
+    })
+
+    return { ok: true, message: `Removed user ${target.name}.` }
+  }
+
+  const addUser = (
+    name: string,
+    email: string,
+    initialGold = 0,
+    verified = true,
+  ): ActionResult => createNewUser(name, email, initialGold, false, verified)
+
+  const registerAndSwitchUser = (
+    name: string,
+    email: string,
+    initialGold = 0,
+  ): ActionResult => createNewUser(name, email, initialGold, true, false)
 
   const toggleShopStatus = (id: number) => {
     commit(prev => ({
@@ -750,6 +929,9 @@ export function useRanDemoStore() {
     resolvePendingOrder,
     approveAllPending,
     toggleUserStatus,
+    toggleUserVerified,
+    updateUser,
+    deleteUser,
     addUser,
     registerAndSwitchUser,
     toggleShopStatus,

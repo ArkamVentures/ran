@@ -78,6 +78,9 @@ function App() {
           onResolvePending={store.resolvePendingOrder}
           onApproveAllPending={store.approveAllPending}
           onToggleUserStatus={store.toggleUserStatus}
+          onToggleUserVerified={store.toggleUserVerified}
+          onUpdateUser={store.updateUser}
+          onDeleteUser={store.deleteUser}
           onAddUser={store.addUser}
           onSwitchToUser={handleSwitchToUserFromAdmin}
           onToggleShopStatus={store.toggleShopStatus}

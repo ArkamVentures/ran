@@ -1559,3 +1559,135 @@ tbody tr:hover { background:#29292E; }
     max-width: 130px;
   }
 }
+
+.welcome-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.verify-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  margin-bottom: 14px;
+}
+.verify-pill.verified {
+  background: rgba(70, 128, 108, 0.18);
+  border: 1px solid rgba(70, 128, 108, 0.45);
+  color: #9ce0c3;
+}
+.verify-pill.unverified {
+  background: rgba(248, 213, 107, 0.14);
+  border: 1px solid rgba(248, 213, 107, 0.35);
+  color: #F8D56B;
+}
+
+.user-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.user-filter-tabs button {
+  border: 1px solid #3A3A40;
+  border-radius: 999px;
+  background: #18181B;
+  color: #A1A1AA;
+  padding: 6px 11px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.user-filter-tabs button.active {
+  background: #F8D56B;
+  border-color: #F8D56B;
+  color: #121214;
+}
+
+.checkbox-row {
+  display: flex !important;
+  align-items: center;
+  gap: 9px;
+  margin: 12px 0 !important;
+  cursor: pointer;
+}
+.checkbox-row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #F8D56B;
+}
+
+.manage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.quick-gold-adjust {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 4px 0 10px;
+  font-size: 11px;
+  color: #A1A1AA;
+}
+.quick-gold-adjust button {
+  border: 1px solid #3A3A40;
+  border-radius: 7px;
+  background: #29292E;
+  color: #F8D56B;
+  padding: 5px 9px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.quick-gold-adjust button:hover {
+  border-color: #F8D56B;
+}
+
+.manage-activity-box {
+  margin: 10px 0 4px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #18181B;
+  border: 1px solid #303036;
+}
+.manage-activity-box ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.manage-activity-box li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #F5F5F7;
+}
+.manage-activity-box li b {
+  color: #F8D56B;
+}
+
+.danger-btn {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(234, 67, 53, 0.45);
+  border-radius: 10px;
+  background: rgba(234, 67, 53, 0.14);
+  color: #ff9a92;
+  font-size: 12px;
+  font-weight: 800;
+}
+.danger-btn:hover {
+  background: rgba(234, 67, 53, 0.28);
+}
+
+@media (max-width: 600px) {
+  .manage-grid {
+    grid-template-columns: 1fr;
+  }
+}

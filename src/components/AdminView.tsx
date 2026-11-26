@@ -1,5 +1,11 @@
 import { useState } from 'react'
-import type { ActionResult, PlatformSettings, RanDemoState } from '../demoStore'
+import type {
+  ActionResult,
+  DemoUser,
+  PlatformSettings,
+  RanDemoState,
+  UserStatus,
+} from '../demoStore'
 import { CoinIcon, Icon } from './Icons'
 
 interface AdminViewProps {
@@ -7,7 +13,19 @@ interface AdminViewProps {
   onResolvePending: (orderId: string, decision: 'approve' | 'reject') => ActionResult
   onApproveAllPending: () => ActionResult
   onToggleUserStatus: (id: number) => void
-  onAddUser: (name: string, email: string, initialGold?: number) => ActionResult
+  onToggleUserVerified: (id: number) => ActionResult
+  onUpdateUser: (
+    id: number,
+    updates: {
+      name: string
+      email: string
+      goldGrams: number
+      status: UserStatus
+      verified: boolean
+    },
+  ) => ActionResult
+  onDeleteUser: (id: number) => ActionResult
+  onAddUser: (name: string, email: string, initialGold?: number, verified?: boolean) => ActionResult
   onSwitchToUser: (userId: number) => void
   onToggleShopStatus: (id: number) => void
   onAddShop: (input: {
@@ -27,6 +45,8 @@ type AdminMenu =
   | 'Gold Rate & Profit'
   | 'Shop Offers'
 
+type UserFilter = 'all' | 'unverified' | 'suspended'
+
 const MENU_ITEMS: { label: AdminMenu; icon: string }[] = [
   { label: 'Dashboard', icon: 'grid' },
   { label: 'Pending Approvals', icon: 'bag' },
@@ -40,6 +60,9 @@ export function AdminView({
   onResolvePending,
   onApproveAllPending,
   onToggleUserStatus,
+  onToggleUserVerified,
+  onUpdateUser,
+  onDeleteUser,
   onAddUser,
   onSwitchToUser,
   onToggleShopStatus,
@@ -49,12 +72,22 @@ export function AdminView({
 }: AdminViewProps) {
   const [menu, setMenu] = useState<AdminMenu>('Dashboard')
   const [feedback, setFeedback] = useState<ActionResult | null>(null)
+  const [userFilter, setUserFilter] = useState<UserFilter>('all')
 
   const [showAddUser, setShowAddUser] = useState(false)
   const [newUserName, setNewUserName] = useState('')
   const [newUserEmail, setNewUserEmail] = useState('')
   const [newUserGold, setNewUserGold] = useState('0')
+  const [newUserVerified, setNewUserVerified] = useState(true)
   const [userFormError, setUserFormError] = useState('')
+
+  const [managedUserId, setManagedUserId] = useState<number | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editGold, setEditGold] = useState('0')
+  const [editStatus, setEditStatus] = useState<UserStatus>('Active')
+  const [editVerified, setEditVerified] = useState(true)
+  const [manageError, setManageError] = useState('')
 
   const [showAddShop, setShowAddShop] = useState(false)
   const [shopName, setShopName] = useState('')
@@ -73,7 +106,58 @@ export function AdminView({
 
   const totalPlatformGold = state.users.reduce((sum, user) => sum + user.goldGrams, 0)
   const activeUsersCount = state.users.filter(user => user.status === 'Active').length
+  const unverifiedUsersCount = state.users.filter(user => !user.verified).length
   const pendingShopsCount = state.shops.filter(shop => shop.status === 'Pending').length
+
+  const filteredUsers = state.users.filter(user => {
+    if (userFilter === 'unverified') return !user.verified
+    if (userFilter === 'suspended') return user.status === 'Suspended'
+    return true
+  })
+
+  const managedUser = state.users.find(user => user.id === managedUserId) ?? null
+  const managedUserActivities = managedUser
+    ? state.activities.filter(item => item.userId === managedUser.id).slice(0, 4)
+    : []
+
+  const openManageUser = (user: DemoUser) => {
+    setManagedUserId(user.id)
+    setEditName(user.name)
+    setEditEmail(user.email)
+    setEditGold(user.goldGrams.toFixed(4))
+    setEditStatus(user.status)
+    setEditVerified(user.verified)
+    setManageError('')
+  }
+
+  const handleSaveManagedUser = (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!managedUser) return
+    const result = onUpdateUser(managedUser.id, {
+      name: editName,
+      email: editEmail,
+      goldGrams: Number(editGold),
+      status: editStatus,
+      verified: editVerified,
+    })
+    if (!result.ok) {
+      setManageError(result.message)
+      return
+    }
+    setManagedUserId(null)
+    setFeedback(result)
+  }
+
+  const handleDeleteManagedUser = () => {
+    if (!managedUser) return
+    const result = onDeleteUser(managedUser.id)
+    if (!result.ok) {
+      setManageError(result.message)
+      return
+    }
+    setManagedUserId(null)
+    setFeedback(result)
+  }
 
   const handleSaveSettings = (event?: React.FormEvent) => {
     event?.preventDefault()
@@ -95,7 +179,12 @@ export function AdminView({
 
   const handleAddUserSubmit = (event: React.FormEvent) => {
     event.preventDefault()
-    const result = onAddUser(newUserName, newUserEmail, Number(newUserGold) || 0)
+    const result = onAddUser(
+      newUserName,
+      newUserEmail,
+      Number(newUserGold) || 0,
+      newUserVerified,
+    )
     if (!result.ok) {
       setUserFormError(result.message)
       return
@@ -104,6 +193,7 @@ export function AdminView({
     setNewUserName('')
     setNewUserEmail('')
     setNewUserGold('0')
+    setNewUserVerified(true)
     setShowAddUser(false)
     setMenu('Users')
     setFeedback(result)
@@ -180,7 +270,9 @@ export function AdminView({
 
       <aside className="wp-sidebar">
         <div className="admin-brand">
-          <span><CoinIcon /></span>
+          <span>
+            <CoinIcon />
+          </span>
           <b>Ran</b>
         </div>
         <nav>
@@ -197,6 +289,7 @@ export function AdminView({
               <Icon name={item.icon} />
               <span>{item.label}</span>
               {idx === 1 && state.pending.length > 0 && <em>{state.pending.length}</em>}
+              {idx === 2 && unverifiedUsersCount > 0 && <em>{unverifiedUsersCount}</em>}
             </button>
           ))}
         </nav>
@@ -247,7 +340,11 @@ export function AdminView({
                   <p>Active Users</p>
                   <h2>{activeUsersCount} Users</h2>
                 </div>
-                <small>{state.users.length} total accounts</small>
+                <small>
+                  {unverifiedUsersCount > 0
+                    ? `${unverifiedUsersCount} awaiting verification`
+                    : 'All users verified'}
+                </small>
               </article>
               <article className="kpi peach">
                 <span className="kpi-icon">◷</span>
@@ -375,8 +472,8 @@ export function AdminView({
             </div>
             {state.pending.length === 0 ? (
               <p className="empty-state">
-                No pending redemption requests. Users can submit new requests once they reach
-                1.0000g.
+                No pending redemption requests. Verified users can submit new requests once they
+                reach 1.0000g.
               </p>
             ) : (
               <div className="table-wrap">
@@ -434,61 +531,111 @@ export function AdminView({
           <section className="approval-card management-card">
             <div className="panel-heading">
               <div>
-                <p>USER CONTROL</p>
-                <h2>Manage users</h2>
+                <p>USER CONTROL & KYC</p>
+                <h2>Verify & manage users</h2>
               </div>
-              <span className="manage-count">{state.users.length} accounts</span>
+              <div className="user-filter-tabs" role="tablist" aria-label="Filter users">
+                <button
+                  type="button"
+                  className={userFilter === 'all' ? 'active' : ''}
+                  onClick={() => setUserFilter('all')}
+                >
+                  All ({state.users.length})
+                </button>
+                <button
+                  type="button"
+                  className={userFilter === 'unverified' ? 'active' : ''}
+                  onClick={() => setUserFilter('unverified')}
+                >
+                  Unverified ({unverifiedUsersCount})
+                </button>
+                <button
+                  type="button"
+                  className={userFilter === 'suspended' ? 'active' : ''}
+                  onClick={() => setUserFilter('suspended')}
+                >
+                  Suspended ({state.users.filter(u => u.status === 'Suspended').length})
+                </button>
+              </div>
             </div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>User</th>
-                    <th>Email</th>
-                    <th>Gold balance</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.users.map(user => (
-                    <tr key={user.id}>
-                      <td>
-                        <b>{user.name}</b>
-                        {user.id === state.currentUserId && <span className="you-pill">Active view</span>}
-                      </td>
-                      <td>{user.email}</td>
-                      <td>
-                        <b>{user.goldGrams.toFixed(4)}g</b>
-                      </td>
-                      <td>
-                        <span
-                          className={`status ${user.status === 'Active' ? 'approved' : 'pending'}`}
-                        >
-                          {user.status}
-                        </span>
-                      </td>
-                      <td className="action-cell">
-                        <button
-                          type="button"
-                          className="approve"
-                          onClick={() => onSwitchToUser(user.id)}
-                        >
-                          Open Wallet
-                        </button>
-                        <button
-                          type="button"
-                          className={user.status === 'Active' ? 'suspend-btn' : 'approve'}
-                          onClick={() => onToggleUserStatus(user.id)}
-                        >
-                          {user.status === 'Active' ? 'Suspend' : 'Activate'}
-                        </button>
-                      </td>
+            {filteredUsers.length === 0 ? (
+              <p className="empty-state">No users match the selected filter.</p>
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Email</th>
+                      <th>Gold balance</th>
+                      <th>Verification</th>
+                      <th>Status</th>
+                      <th>Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map(user => (
+                      <tr key={user.id}>
+                        <td>
+                          <b>{user.name}</b>
+                          {user.id === state.currentUserId && (
+                            <span className="you-pill">Active view</span>
+                          )}
+                        </td>
+                        <td>{user.email}</td>
+                        <td>
+                          <b>{user.goldGrams.toFixed(4)}g</b>
+                        </td>
+                        <td>
+                          <span
+                            className={`status ${user.verified ? 'approved' : 'pending'}`}
+                          >
+                            {user.verified ? 'Verified' : 'Unverified'}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`status ${user.status === 'Active' ? 'approved' : 'pending'}`}
+                          >
+                            {user.status}
+                          </span>
+                        </td>
+                        <td className="action-cell">
+                          <button
+                            type="button"
+                            className={user.verified ? 'suspend-btn' : 'approve'}
+                            onClick={() => setFeedback(onToggleUserVerified(user.id))}
+                          >
+                            {user.verified ? 'Unverify' : 'Verify'}
+                          </button>
+                          <button
+                            type="button"
+                            className="approve"
+                            onClick={() => openManageUser(user)}
+                          >
+                            Manage
+                          </button>
+                          <button
+                            type="button"
+                            className="approve"
+                            onClick={() => onSwitchToUser(user.id)}
+                          >
+                            Open Wallet
+                          </button>
+                          <button
+                            type="button"
+                            className={user.status === 'Active' ? 'suspend-btn' : 'approve'}
+                            onClick={() => onToggleUserStatus(user.id)}
+                          >
+                            {user.status === 'Active' ? 'Suspend' : 'Activate'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         )}
 
@@ -641,6 +788,14 @@ export function AdminView({
                 onChange={event => setNewUserGold(event.target.value)}
               />
             </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={newUserVerified}
+                onChange={event => setNewUserVerified(event.target.checked)}
+              />
+              <span>Mark user as KYC verified</span>
+            </label>
             {userFormError && (
               <p className="login-error" role="alert">
                 {userFormError}
@@ -649,6 +804,151 @@ export function AdminView({
             <button className="save-btn" type="submit">
               Create user
             </button>
+          </form>
+        </div>
+      )}
+
+      {managedUser && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setManagedUserId(null)
+          }}
+        >
+          <form className="add-user-modal modal-wide" onSubmit={handleSaveManagedUser}>
+            <div className="panel-heading">
+              <div>
+                <p>MANAGE USER</p>
+                <h2>{managedUser.name}</h2>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setManagedUserId(null)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="manage-grid">
+              <label>
+                Full name
+                <input
+                  value={editName}
+                  onChange={event => setEditName(event.target.value)}
+                />
+              </label>
+              <label>
+                Email address
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={event => setEditEmail(event.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className="manage-grid">
+              <label>
+                Gold balance (g)
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={editGold}
+                  onChange={event => setEditGold(event.target.value)}
+                />
+              </label>
+              <label>
+                Account status
+                <select
+                  value={editStatus}
+                  onChange={event => setEditStatus(event.target.value as UserStatus)}
+                >
+                  <option value="Active">Active</option>
+                  <option value="Suspended">Suspended</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="quick-gold-adjust">
+              <span>Quick balance adjust:</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setEditGold(prev => Math.max(0, (Number(prev) || 0) + 0.5).toFixed(4))
+                }
+              >
+                +0.5g
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setEditGold(prev => Math.max(0, (Number(prev) || 0) + 1).toFixed(4))
+                }
+              >
+                +1.0g
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditGold('0.0000')}
+              >
+                Clear (0g)
+              </button>
+            </div>
+
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={editVerified}
+                onChange={event => setEditVerified(event.target.checked)}
+              />
+              <span>Verified user (allows Gold Shop redemptions)</span>
+            </label>
+
+            {managedUserActivities.length > 0 && (
+              <div className="manage-activity-box">
+                <p className="eyebrow">RECENT USER ACTIVITY</p>
+                <ul>
+                  {managedUserActivities.map(act => (
+                    <li key={act.id}>
+                      <span>{act.title}</span>
+                      <b>{act.amountLabel}</b>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {manageError && (
+              <p className="login-error" role="alert">
+                {manageError}
+              </p>
+            )}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="danger-btn"
+                onClick={handleDeleteManagedUser}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => {
+                  setManagedUserId(null)
+                  onSwitchToUser(managedUser.id)
+                }}
+              >
+                Open Wallet
+              </button>
+              <button className="save-btn" type="submit">
+                Save user changes
+              </button>
+            </div>
           </form>
         </div>
       )}

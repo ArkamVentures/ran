@@ -101,6 +101,13 @@ export function UserView({
   }
 
   const openRedeem = (preselectedShop?: string) => {
+    if (!user.verified) {
+      setPurchaseMessage({
+        ok: false,
+        message: 'Account verification required. Verify this user in Admin → Users before redeeming.',
+      })
+      return
+    }
     setModalError('')
     setRedeemShop(preselectedShop ?? approvedShops[0]?.name ?? '')
     setRedeemGrams(Math.min(goldGrams, 1).toFixed(4))
@@ -195,7 +202,12 @@ export function UserView({
         <div className="welcome-row">
           <div>
             <p className="eyebrow">{formatHeaderDate()}</p>
-            <h1>Good morning, {user.name.split(' ')[0]}</h1>
+            <div className="welcome-title-row">
+              <h1>Good morning, {user.name.split(' ')[0]}</h1>
+              <span className={`verify-pill ${user.verified ? 'verified' : 'unverified'}`}>
+                {user.verified ? '✓ Verified' : '◷ Pending verification'}
+              </span>
+            </div>
           </div>
           <div className="welcome-actions">
             <button type="button" className="outline-btn notif-btn" onClick={openNotifications}>
@@ -214,6 +226,13 @@ export function UserView({
           <div className="demo-alert" role="alert">
             Your user account is suspended by Admin. Reactivate {user.name} in the Admin panel to
             buy or redeem gold.
+          </div>
+        )}
+
+        {user.status === 'Active' && !user.verified && (
+          <div className="demo-alert" role="status">
+            Account pending Admin verification. You can buy digital gold now; verify {user.name} in{' '}
+            <b>Admin → Users</b> to unlock Gold Shop redemption.
           </div>
         )}
 
