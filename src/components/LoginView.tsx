@@ -1,13 +1,25 @@
 import { useState } from 'react'
+import type { ActionResult, DemoUser } from '../demoStore'
 import { CoinIcon } from './Icons'
 
 interface LoginViewProps {
-  currentGoldGrams: number
-  onLogin: (role: 'user' | 'admin') => void
+  users: DemoUser[]
+  currentUser: DemoUser
+  onLogin: (role: 'user' | 'admin', email?: string) => void
+  onSelectUser: (userId: number) => void
+  onRegisterUser: (name: string, email: string, initialGold?: number) => ActionResult
 }
 
-export function LoginView({ currentGoldGrams, onLogin }: LoginViewProps) {
+export function LoginView({
+  users,
+  currentUser,
+  onLogin,
+  onSelectUser,
+  onRegisterUser,
+}: LoginViewProps) {
   const [role, setRole] = useState<'user' | 'admin'>('user')
+  const [mode, setMode] = useState<'signin' | 'register'>('signin')
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -15,25 +27,43 @@ export function LoginView({ currentGoldGrams, onLogin }: LoginViewProps) {
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
+
+    if (role === 'user' && mode === 'register') {
+      if (!fullName.trim() || !email.trim() || !password.trim()) {
+        setError('Enter full name, email address, and password.')
+        return
+      }
+      const result = onRegisterUser(fullName, email, 0)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      setError('')
+      onLogin('user', email)
+      return
+    }
+
     if (!email.trim() || !password.trim()) {
       setError('Enter both email and password, or use Continue with Google.')
       return
     }
     setError('')
-    onLogin(role)
+    onLogin(role, email)
   }
 
   const handleRoleChange = (nextRole: 'user' | 'admin') => {
     setRole(nextRole)
+    if (nextRole === 'admin') setMode('signin')
     setError('')
     if (hint) {
-      setEmail(nextRole === 'admin' ? 'admin@ran.app' : 'aisha@ran.app')
+      setEmail(nextRole === 'admin' ? 'admin@ran.app' : currentUser.email)
     }
   }
 
   const handleForgotPassword = () => {
     setError('')
-    setEmail(role === 'admin' ? 'admin@ran.app' : 'aisha@ran.app')
+    setMode('signin')
+    setEmail(role === 'admin' ? 'admin@ran.app' : currentUser.email)
     setPassword('demo1234')
     setHint('Demo credentials filled — click Sign in or use Continue with Google.')
   }
@@ -42,7 +72,9 @@ export function LoginView({ currentGoldGrams, onLogin }: LoginViewProps) {
     <main className="login-shell">
       <section className="login-brand-panel">
         <div className="login-brand">
-          <span className="brand-mark"><CoinIcon /></span>
+          <span className="brand-mark">
+            <CoinIcon />
+          </span>
           <b>Ran</b>
         </div>
         <div className="login-brand-copy">
@@ -53,15 +85,15 @@ export function LoginView({ currentGoldGrams, onLogin }: LoginViewProps) {
             one gram at a time.
           </h1>
           <div className="login-glow">
-            <span>{currentGoldGrams.toFixed(4)}g</span>
-            <small>Secure digital gold wallet</small>
+            <span>{currentUser.goldGrams.toFixed(4)}g</span>
+            <small>{currentUser.name}</small>
           </div>
         </div>
       </section>
       <section className="login-form-panel">
         <form className="login-card" onSubmit={handleSubmit}>
           <p className="eyebrow">WELCOME BACK</p>
-          <h2>Sign in to Ran</h2>
+          <h2>{mode === 'register' && role === 'user' ? 'Create Ran account' : 'Sign in to Ran'}</h2>
           <div className="login-roles">
             <button
               type="button"
@@ -78,13 +110,73 @@ export function LoginView({ currentGoldGrams, onLogin }: LoginViewProps) {
               Admin
             </button>
           </div>
+
+          {role === 'user' && (
+            <div className="login-mode-row">
+              <button
+                type="button"
+                className={mode === 'signin' ? 'active' : ''}
+                onClick={() => {
+                  setMode('signin')
+                  setError('')
+                }}
+              >
+                Existing user
+              </button>
+              <button
+                type="button"
+                className={mode === 'register' ? 'active' : ''}
+                onClick={() => {
+                  setMode('register')
+                  setError('')
+                  setHint('')
+                }}
+              >
+                + New user
+              </button>
+            </div>
+          )}
+
+          {role === 'user' && mode === 'signin' && (
+            <div className="demo-user-chips" aria-label="Quick select demo user">
+              {users.map(user => (
+                <button
+                  type="button"
+                  key={user.id}
+                  className={currentUser.id === user.id ? 'active' : ''}
+                  onClick={() => {
+                    onSelectUser(user.id)
+                    setEmail(user.email)
+                    setPassword('demo1234')
+                    setError('')
+                    setHint(`Selected ${user.name} (${user.goldGrams.toFixed(4)}g).`)
+                  }}
+                >
+                  {user.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {role === 'user' && mode === 'register' && (
+            <label>
+              Full name
+              <input
+                type="text"
+                value={fullName}
+                onChange={event => setFullName(event.target.value)}
+                placeholder="Enter full name"
+              />
+            </label>
+          )}
+
           <label>
             Email address
             <input
               type="email"
               value={email}
               onChange={event => setEmail(event.target.value)}
-              placeholder={role === 'admin' ? 'admin@ran.app' : 'aisha@ran.app'}
+              placeholder={role === 'admin' ? 'admin@ran.app' : currentUser.email}
             />
           </label>
           <label>
@@ -107,7 +199,12 @@ export function LoginView({ currentGoldGrams, onLogin }: LoginViewProps) {
             </p>
           )}
           <button className="login-submit" type="submit">
-            Sign in as {role === 'admin' ? 'Admin' : 'User'} <span>→</span>
+            {role === 'admin'
+              ? 'Sign in as Admin'
+              : mode === 'register'
+                ? 'Create account & enter'
+                : `Sign in as ${currentUser.name.split(' ')[0]}`}{' '}
+            <span>→</span>
           </button>
           <div className="login-divider">
             <span>or</span>

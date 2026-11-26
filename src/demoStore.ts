@@ -10,7 +10,6 @@ export interface DemoUser {
   email: string
   goldGrams: number
   status: UserStatus
-  isCurrentUser?: boolean
 }
 
 export interface DemoShop {
@@ -35,6 +34,7 @@ export interface PendingOrder {
 
 export interface ActivityItem {
   id: string
+  userId: number
   type: 'buy' | 'redeem' | 'cashout' | 'approved' | 'rejected'
   title: string
   detail: string
@@ -44,6 +44,7 @@ export interface ActivityItem {
 
 export interface NotificationItem {
   id: string
+  userId: number
   title: string
   detail: string
   timestamp: string
@@ -57,6 +58,7 @@ export interface PlatformSettings {
 }
 
 export interface RanDemoState {
+  currentUserId: number
   settings: PlatformSettings
   profitEarned: number
   users: DemoUser[]
@@ -71,7 +73,7 @@ export interface ActionResult {
   message: string
 }
 
-const STORAGE_KEY = 'ran-demo-state-v1'
+const STORAGE_KEY = 'ran-demo-state-v2'
 const SYNC_EVENT = 'ran-demo-state-sync'
 
 function nowLabel(): string {
@@ -83,6 +85,7 @@ function nowLabel(): string {
 
 export function createInitialState(): RanDemoState {
   return {
+    currentUserId: 1,
     settings: {
       goldRate: 25400,
       commissionPercent: 2.5,
@@ -96,7 +99,6 @@ export function createInitialState(): RanDemoState {
         email: 'aisha@ran.app',
         goldGrams: 0.845,
         status: 'Active',
-        isCurrentUser: true,
       },
       {
         id: 2,
@@ -174,6 +176,7 @@ export function createInitialState(): RanDemoState {
     activities: [
       {
         id: 'act-seed-1',
+        userId: 1,
         type: 'buy',
         title: 'Digital gold purchase',
         detail: 'Bought at Rs. 25,400/g',
@@ -182,6 +185,7 @@ export function createInitialState(): RanDemoState {
       },
       {
         id: 'act-seed-2',
+        userId: 1,
         type: 'buy',
         title: 'Auto-save top-up',
         detail: 'Weekly micro-gold deposit',
@@ -192,6 +196,7 @@ export function createInitialState(): RanDemoState {
     notifications: [
       {
         id: 'notif-seed-1',
+        userId: 1,
         title: 'Goal almost reached',
         detail: 'You are just 0.1550g away from unlocking 1g Gold Shop redemption.',
         timestamp: 'Today',
@@ -199,6 +204,7 @@ export function createInitialState(): RanDemoState {
       },
       {
         id: 'notif-seed-2',
+        userId: 1,
         title: 'Live gold rate active',
         detail: 'Today’s rate is Rs. 25,400 per gram.',
         timestamp: 'Today',
@@ -235,7 +241,7 @@ function persistState(next: RanDemoState): void {
 }
 
 export function getCurrentUser(state: RanDemoState): DemoUser {
-  return state.users.find(user => user.isCurrentUser) ?? state.users[0]
+  return state.users.find(user => user.id === state.currentUserId) ?? state.users[0]
 }
 
 export function useRanDemoStore() {
@@ -257,6 +263,70 @@ export function useRanDemoStore() {
       persistState(next)
       return next
     })
+  }
+
+  const switchCurrentUser = (userId: number) => {
+    commit(prev => {
+      if (!prev.users.some(user => user.id === userId)) return prev
+      return { ...prev, currentUserId: userId }
+    })
+  }
+
+  const loginUserByEmail = (email?: string) => {
+    const cleanEmail = email?.trim().toLowerCase()
+    if (!cleanEmail) return
+    commit(prev => {
+      const match = prev.users.find(user => user.email.toLowerCase() === cleanEmail)
+      if (!match) return prev
+      return { ...prev, currentUserId: match.id }
+    })
+  }
+
+  const createNewUser = (
+    name: string,
+    email: string,
+    initialGold = 0,
+    switchToNewUser = false,
+  ): ActionResult => {
+    const cleanName = name.trim()
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanName || !cleanEmail) {
+      return { ok: false, message: 'Enter both full name and email address.' }
+    }
+    if (state.users.some(user => user.email.toLowerCase() === cleanEmail)) {
+      return { ok: false, message: 'A user with that email already exists.' }
+    }
+
+    const newId = Date.now()
+    const time = nowLabel()
+
+    commit(prev => ({
+      ...prev,
+      currentUserId: switchToNewUser ? newId : prev.currentUserId,
+      users: [
+        ...prev.users,
+        {
+          id: newId,
+          name: cleanName,
+          email: cleanEmail,
+          goldGrams: Math.max(0, initialGold),
+          status: 'Active',
+        },
+      ],
+      notifications: [
+        {
+          id: `notif-${newId}`,
+          userId: newId,
+          title: `Welcome to Ran, ${cleanName.split(' ')[0]}!`,
+          detail: 'Start investing in digital gold from Rs. 20.',
+          timestamp: time,
+          read: false,
+        },
+        ...prev.notifications,
+      ],
+    }))
+
+    return { ok: true, message: `Created user account for ${cleanName}.` }
   }
 
   const buyGold = (rupees: number): ActionResult => {
@@ -286,6 +356,7 @@ export function useRanDemoStore() {
       activities: [
         {
           id: `act-${Date.now()}`,
+          userId: currentUser.id,
           type: 'buy',
           title: 'Digital gold purchase',
           detail: `Paid Rs. ${rupees.toLocaleString('en-IN')} at Rs. ${prev.settings.goldRate.toLocaleString('en-IN')}/g`,
@@ -297,6 +368,7 @@ export function useRanDemoStore() {
       notifications: [
         {
           id: `notif-${Date.now()}`,
+          userId: currentUser.id,
           title: 'Gold added to wallet',
           detail: `${gramsBought.toFixed(4)}g purchased for Rs. ${rupees.toLocaleString('en-IN')}.`,
           timestamp: time,
@@ -335,6 +407,7 @@ export function useRanDemoStore() {
       activities: [
         {
           id: `act-${Date.now()}`,
+          userId: currentUser.id,
           type: 'cashout',
           title: 'Reversed gold to cash',
           detail: `Credited Rs. ${cashValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`,
@@ -346,6 +419,7 @@ export function useRanDemoStore() {
       notifications: [
         {
           id: `notif-${Date.now()}`,
+          userId: currentUser.id,
           title: 'Cash reversal processed',
           detail: `${safeGrams.toFixed(4)}g converted to Rs. ${cashValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}.`,
           timestamp: time,
@@ -397,6 +471,7 @@ export function useRanDemoStore() {
       activities: [
         {
           id: `act-${Date.now()}`,
+          userId: currentUser.id,
           type: 'redeem',
           title: `Redemption requested (${orderId})`,
           detail: `Awaiting admin approval for ${shopName}`,
@@ -408,6 +483,7 @@ export function useRanDemoStore() {
       notifications: [
         {
           id: `notif-${Date.now()}`,
+          userId: currentUser.id,
           title: `Redemption ${orderId} submitted`,
           detail: `Sent to admin approval queue for ${shopName}.`,
           timestamp: time,
@@ -430,7 +506,6 @@ export function useRanDemoStore() {
     }
 
     const time = nowLabel()
-    const isCurrent = order.userId === getCurrentUser(state).id
 
     commit(prev => {
       const nextUsers =
@@ -452,46 +527,44 @@ export function useRanDemoStore() {
         profitEarned: prev.profitEarned + feeEarned,
         users: nextUsers,
         pending: prev.pending.filter(item => item.id !== orderId),
-        activities: isCurrent
-          ? [
-              {
-                id: `act-${Date.now()}`,
-                type: decision === 'approve' ? 'approved' : 'rejected',
-                title:
-                  decision === 'approve'
-                    ? `Redemption ${order.id} approved`
-                    : `Redemption ${order.id} rejected`,
-                detail:
-                  decision === 'approve'
-                    ? `Collect ${order.grams.toFixed(4)}g at ${order.shop}`
-                    : `${order.grams.toFixed(4)}g refunded to wallet`,
-                amountLabel:
-                  decision === 'approve'
-                    ? `${order.grams.toFixed(4)}g`
-                    : `+${order.grams.toFixed(4)}g`,
-                timestamp: time,
-              },
-              ...prev.activities,
-            ]
-          : prev.activities,
-        notifications: isCurrent
-          ? [
-              {
-                id: `notif-${Date.now()}`,
-                title:
-                  decision === 'approve'
-                    ? `Redemption ${order.id} approved`
-                    : `Redemption ${order.id} rejected`,
-                detail:
-                  decision === 'approve'
-                    ? `Your ${order.grams.toFixed(4)}g voucher is ready at ${order.shop}.`
-                    : `Admin refunded ${order.grams.toFixed(4)}g back to your wallet.`,
-                timestamp: time,
-                read: false,
-              },
-              ...prev.notifications,
-            ]
-          : prev.notifications,
+        activities: [
+          {
+            id: `act-${Date.now()}`,
+            userId: order.userId,
+            type: decision === 'approve' ? 'approved' : 'rejected',
+            title:
+              decision === 'approve'
+                ? `Redemption ${order.id} approved`
+                : `Redemption ${order.id} rejected`,
+            detail:
+              decision === 'approve'
+                ? `Collect ${order.grams.toFixed(4)}g at ${order.shop}`
+                : `${order.grams.toFixed(4)}g refunded to wallet`,
+            amountLabel:
+              decision === 'approve'
+                ? `${order.grams.toFixed(4)}g`
+                : `+${order.grams.toFixed(4)}g`,
+            timestamp: time,
+          },
+          ...prev.activities,
+        ],
+        notifications: [
+          {
+            id: `notif-${Date.now()}`,
+            userId: order.userId,
+            title:
+              decision === 'approve'
+                ? `Redemption ${order.id} approved`
+                : `Redemption ${order.id} rejected`,
+            detail:
+              decision === 'approve'
+                ? `Your ${order.grams.toFixed(4)}g voucher is ready at ${order.shop}.`
+                : `Admin refunded ${order.grams.toFixed(4)}g back to your wallet.`,
+            timestamp: time,
+            read: false,
+          },
+          ...prev.notifications,
+        ],
       }
     })
 
@@ -510,18 +583,17 @@ export function useRanDemoStore() {
     }
     const count = state.pending.length
     const time = nowLabel()
-    const currentId = getCurrentUser(state).id
 
     commit(prev => {
-      const currentOrders = prev.pending.filter(item => item.userId === currentId)
       const totalCommission = prev.pending.reduce(
         (sum, item) =>
           sum + (item.grams * prev.settings.goldRate * prev.settings.commissionPercent) / 100,
         0,
       )
 
-      const newActivities: ActivityItem[] = currentOrders.map((order, idx) => ({
+      const newActivities: ActivityItem[] = prev.pending.map((order, idx) => ({
         id: `act-${Date.now()}-${idx}`,
+        userId: order.userId,
         type: 'approved',
         title: `Redemption ${order.id} approved`,
         detail: `Collect ${order.grams.toFixed(4)}g at ${order.shop}`,
@@ -529,8 +601,9 @@ export function useRanDemoStore() {
         timestamp: time,
       }))
 
-      const newNotifications: NotificationItem[] = currentOrders.map((order, idx) => ({
+      const newNotifications: NotificationItem[] = prev.pending.map((order, idx) => ({
         id: `notif-${Date.now()}-${idx}`,
+        userId: order.userId,
         title: `Redemption ${order.id} approved`,
         detail: `Your ${order.grams.toFixed(4)}g voucher is ready at ${order.shop}.`,
         timestamp: time,
@@ -560,32 +633,11 @@ export function useRanDemoStore() {
     }))
   }
 
-  const addUser = (name: string, email: string, initialGold = 0): ActionResult => {
-    const cleanName = name.trim()
-    const cleanEmail = email.trim().toLowerCase()
-    if (!cleanName || !cleanEmail) {
-      return { ok: false, message: 'Enter both full name and email address.' }
-    }
-    if (state.users.some(user => user.email.toLowerCase() === cleanEmail)) {
-      return { ok: false, message: 'A user with that email already exists.' }
-    }
+  const addUser = (name: string, email: string, initialGold = 0): ActionResult =>
+    createNewUser(name, email, initialGold, false)
 
-    commit(prev => ({
-      ...prev,
-      users: [
-        ...prev.users,
-        {
-          id: Date.now(),
-          name: cleanName,
-          email: cleanEmail,
-          goldGrams: Math.max(0, initialGold),
-          status: 'Active',
-        },
-      ],
-    }))
-
-    return { ok: true, message: `Created user account for ${cleanName}.` }
-  }
+  const registerAndSwitchUser = (name: string, email: string, initialGold = 0): ActionResult =>
+    createNewUser(name, email, initialGold, true)
 
   const toggleShopStatus = (id: number) => {
     commit(prev => ({
@@ -638,7 +690,11 @@ export function useRanDemoStore() {
     if (!Number.isFinite(next.goldRate) || next.goldRate < 1000) {
       return { ok: false, message: 'Gold rate must be at least Rs. 1,000.' }
     }
-    if (!Number.isFinite(next.commissionPercent) || next.commissionPercent < 0 || next.commissionPercent > 50) {
+    if (
+      !Number.isFinite(next.commissionPercent) ||
+      next.commissionPercent < 0 ||
+      next.commissionPercent > 50
+    ) {
       return { ok: false, message: 'Commission must be between 0% and 50%.' }
     }
     if (!Number.isFinite(next.minPurchase) || next.minPurchase < 1) {
@@ -653,13 +709,14 @@ export function useRanDemoStore() {
       settings: next,
       notifications: rateChanged
         ? [
-            {
-              id: `notif-${Date.now()}`,
+            ...prev.users.map(user => ({
+              id: `notif-${Date.now()}-${user.id}`,
+              userId: user.id,
               title: 'Gold rate updated',
               detail: `Live rate is now Rs. ${next.goldRate.toLocaleString('en-IN')} per gram.`,
               timestamp: time,
               read: false,
-            },
+            })),
             ...prev.notifications,
           ]
         : prev.notifications,
@@ -668,10 +725,12 @@ export function useRanDemoStore() {
     return { ok: true, message: 'Gold rate & platform settings saved.' }
   }
 
-  const markAllNotificationsRead = () => {
+  const markAllNotificationsRead = (userId: number) => {
     commit(prev => ({
       ...prev,
-      notifications: prev.notifications.map(item => ({ ...item, read: true })),
+      notifications: prev.notifications.map(item =>
+        item.userId === userId ? { ...item, read: true } : item,
+      ),
     }))
   }
 
@@ -683,6 +742,8 @@ export function useRanDemoStore() {
 
   return {
     state,
+    switchCurrentUser,
+    loginUserByEmail,
     buyGold,
     reverseToCash,
     requestRedemption,
@@ -690,6 +751,7 @@ export function useRanDemoStore() {
     approveAllPending,
     toggleUserStatus,
     addUser,
+    registerAndSwitchUser,
     toggleShopStatus,
     addShop,
     updateSettings,
@@ -697,4 +759,3 @@ export function useRanDemoStore() {
     resetDemo,
   }
 }
-

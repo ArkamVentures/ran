@@ -37,21 +37,38 @@ function App() {
     setView(nextView)
   }
 
+  const handleLogin = (role: 'user' | 'admin', email?: string) => {
+    if (role === 'user' && email) {
+      store.loginUserByEmail(email)
+    }
+    navigate(role)
+  }
+
+  const handleSwitchToUserFromAdmin = (userId: number) => {
+    store.switchCurrentUser(userId)
+    navigate('user')
+  }
+
   return (
     <div className="app">
       {view === 'login' && (
         <LoginView
-          currentGoldGrams={currentUser.goldGrams}
-          onLogin={role => navigate(role)}
+          users={store.state.users}
+          currentUser={currentUser}
+          onLogin={handleLogin}
+          onSelectUser={store.switchCurrentUser}
+          onRegisterUser={store.registerAndSwitchUser}
         />
       )}
       {view === 'user' && (
         <UserView
           state={store.state}
+          onSwitchUser={store.switchCurrentUser}
+          onCreateAndSwitchUser={store.registerAndSwitchUser}
           onBuyGold={store.buyGold}
           onReverseToCash={store.reverseToCash}
           onRequestRedemption={store.requestRedemption}
-          onMarkNotificationsRead={store.markAllNotificationsRead}
+          onMarkNotificationsRead={() => store.markAllNotificationsRead(currentUser.id)}
           onLogout={() => navigate('login')}
         />
       )}
@@ -62,6 +79,7 @@ function App() {
           onApproveAllPending={store.approveAllPending}
           onToggleUserStatus={store.toggleUserStatus}
           onAddUser={store.addUser}
+          onSwitchToUser={handleSwitchToUserFromAdmin}
           onToggleShopStatus={store.toggleShopStatus}
           onAddShop={store.addShop}
           onUpdateSettings={store.updateSettings}

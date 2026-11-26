@@ -8,6 +8,7 @@ interface AdminViewProps {
   onApproveAllPending: () => ActionResult
   onToggleUserStatus: (id: number) => void
   onAddUser: (name: string, email: string, initialGold?: number) => ActionResult
+  onSwitchToUser: (userId: number) => void
   onToggleShopStatus: (id: number) => void
   onAddShop: (input: {
     name: string

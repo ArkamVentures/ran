@@ -5,6 +5,8 @@ import { CoinIcon, Icon } from './Icons'
 
 interface UserViewProps {
   state: RanDemoState
+  onSwitchUser: (userId: number) => void
+  onCreateAndSwitchUser: (name: string, email: string, initialGold?: number) => ActionResult
   onBuyGold: (rupees: number) => ActionResult
   onReverseToCash: (grams: number) => ActionResult
   onRequestRedemption: (shopName: string, grams: number) => ActionResult
@@ -20,6 +22,7 @@ type UserModal =
   | { type: 'redeem'; preselectedShop?: string }
   | { type: 'offers' }
   | { type: 'offer-detail'; shop: DemoShop }
+  | { type: 'new-user' }
 
 function formatHeaderDate(): string {
   return new Date()
@@ -41,6 +44,8 @@ function getInitials(name: string): string {
 
 export function UserView({
   state,
+  onSwitchUser,
+  onCreateAndSwitchUser,
   onBuyGold,
   onReverseToCash,
   onRequestRedemption,
@@ -51,9 +56,7 @@ export function UserView({
   const { goldRate, minPurchase } = state.settings
   const choices = useMemo(() => {
     const base = [20, 50, 100]
-    return minPurchase > 20
-      ? [minPurchase, minPurchase * 2, minPurchase * 5]
-      : base
+    return minPurchase > 20 ? [minPurchase, minPurchase * 2, minPurchase * 5] : base
   }, [minPurchase])
 
   const [amount, setAmount] = useState(50)
@@ -64,6 +67,9 @@ export function UserView({
   const [cashoutGrams, setCashoutGrams] = useState('0.2000')
   const [redeemShop, setRedeemShop] = useState('')
   const [redeemGrams, setRedeemGrams] = useState('1.0000')
+  const [newName, setNewName] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [newGold, setNewGold] = useState('0')
   const [modalError, setModalError] = useState('')
 
   const goldGrams = user.goldGrams
@@ -71,7 +77,9 @@ export function UserView({
   const progress = Math.min((goldGrams / 1) * 100, 100)
   const remaining = Math.max(1 - goldGrams, 0)
   const approvedShops = state.shops.filter(shop => shop.status === 'Approved')
-  const unreadCount = state.notifications.filter(item => !item.read).length
+  const userActivities = state.activities.filter(item => item.userId === user.id)
+  const userNotifications = state.notifications.filter(item => item.userId === user.id)
+  const unreadCount = userNotifications.filter(item => !item.read).length
 
   const effectivePurchaseAmount = custom.trim() ? Number(custom) : amount || choices[1]
 
@@ -99,6 +107,14 @@ export function UserView({
     setModal({ type: 'redeem', preselectedShop })
   }
 
+  const openNewUserModal = () => {
+    setModalError('')
+    setNewName('')
+    setNewEmail('')
+    setNewGold('0')
+    setModal({ type: 'new-user' })
+  }
+
   const submitCashout = (event: React.FormEvent) => {
     event.preventDefault()
     const result = onReverseToCash(Number(cashoutGrams))
@@ -121,11 +137,24 @@ export function UserView({
     setModal(null)
   }
 
+  const submitNewUser = (event: React.FormEvent) => {
+    event.preventDefault()
+    const result = onCreateAndSwitchUser(newName, newEmail, Number(newGold) || 0)
+    if (!result.ok) {
+      setModalError(result.message)
+      return
+    }
+    setPurchaseMessage({ ok: true, message: `Switched to new user ${newName.trim()}` })
+    setModal(null)
+  }
+
   return (
     <main className="user-shell">
       <header className="user-header">
         <div className="brand">
-          <span className="brand-mark"><CoinIcon /></span>
+          <span className="brand-mark">
+            <CoinIcon />
+          </span>
           <span>Ran</span>
         </div>
         <div className="gold-rate">
@@ -133,10 +162,31 @@ export function UserView({
           1g = Rs. {goldRate.toLocaleString('en-IN')}
         </div>
         <div className="profile">
-          <span className="profile-copy">
-            <b>{user.name}</b>
-            <small>{user.status === 'Suspended' ? 'Account suspended' : 'Gold saver'}</small>
-          </span>
+          <div className="user-picker-wrap">
+            <select
+              className="user-picker"
+              aria-label="Switch demo user"
+              value={user.id}
+              onChange={event => {
+                setPurchaseMessage(null)
+                onSwitchUser(Number(event.target.value))
+              }}
+            >
+              {state.users.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.name} ({item.goldGrams.toFixed(2)}g)
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="add-user-pill"
+              title="Add and switch to a new user"
+              onClick={openNewUserModal}
+            >
+              + New
+            </button>
+          </div>
           <span className="avatar">{getInitials(user.name)}</span>
         </div>
       </header>
@@ -177,7 +227,9 @@ export function UserView({
                 </div>
               </div>
               <div className="coin-visual">
-                <span><CoinIcon /></span>
+                <span>
+                  <CoinIcon />
+                </span>
               </div>
             </div>
             <div className="wallet-bottom">
@@ -338,6 +390,63 @@ export function UserView({
         </section>
       </section>
 
+      {modal?.type === 'new-user' && (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onMouseDown={event => {
+            if (event.target === event.currentTarget) setModal(null)
+          }}
+        >
+          <form className="add-user-modal" onSubmit={submitNewUser}>
+            <div className="panel-heading">
+              <div>
+                <p>NEW ACCOUNT</p>
+                <h2>Add a new user</h2>
+              </div>
+              <button type="button" className="modal-close" onClick={() => setModal(null)}>
+                ×
+              </button>
+            </div>
+            <label>
+              Full name
+              <input
+                value={newName}
+                onChange={event => setNewName(event.target.value)}
+                placeholder="Enter full name"
+              />
+            </label>
+            <label>
+              Email address
+              <input
+                type="email"
+                value={newEmail}
+                onChange={event => setNewEmail(event.target.value)}
+                placeholder="user@ran.app"
+              />
+            </label>
+            <label>
+              Starting gold balance (g)
+              <input
+                type="number"
+                step="0.0001"
+                min="0"
+                value={newGold}
+                onChange={event => setNewGold(event.target.value)}
+              />
+            </label>
+            {modalError && (
+              <p className="login-error" role="alert">
+                {modalError}
+              </p>
+            )}
+            <button type="submit" className="save-btn">
+              Create & open wallet
+            </button>
+          </form>
+        </div>
+      )}
+
       {modal?.type === 'activity' && (
         <div
           className="modal-backdrop"
@@ -349,18 +458,18 @@ export function UserView({
           <div className="add-user-modal modal-wide">
             <div className="panel-heading">
               <div>
-                <p>WALLET LEDGER</p>
+                <p>WALLET LEDGER · {user.name.toUpperCase()}</p>
                 <h2>Recent activity</h2>
               </div>
               <button type="button" className="modal-close" onClick={() => setModal(null)}>
                 ×
               </button>
             </div>
-            {state.activities.length === 0 ? (
-              <p className="empty-state">No transactions recorded yet.</p>
+            {userActivities.length === 0 ? (
+              <p className="empty-state">No transactions recorded yet for {user.name}.</p>
             ) : (
               <ul className="activity-list">
-                {state.activities.map(item => (
+                {userActivities.map(item => (
                   <li key={item.id} className="activity-item">
                     <div>
                       <strong>{item.title}</strong>
@@ -391,26 +500,30 @@ export function UserView({
           <div className="add-user-modal modal-wide">
             <div className="panel-heading">
               <div>
-                <p>UPDATES</p>
+                <p>UPDATES · {user.name.toUpperCase()}</p>
                 <h2>Notifications</h2>
               </div>
               <button type="button" className="modal-close" onClick={() => setModal(null)}>
                 ×
               </button>
             </div>
-            <ul className="activity-list">
-              {state.notifications.map(item => (
-                <li key={item.id} className="activity-item">
-                  <div>
-                    <strong>{item.title}</strong>
-                    <small>{item.detail}</small>
-                  </div>
-                  <div className="activity-right">
-                    <small>{item.timestamp}</small>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {userNotifications.length === 0 ? (
+              <p className="empty-state">No notifications yet for {user.name}.</p>
+            ) : (
+              <ul className="activity-list">
+                {userNotifications.map(item => (
+                  <li key={item.id} className="activity-item">
+                    <div>
+                      <strong>{item.title}</strong>
+                      <small>{item.detail}</small>
+                    </div>
+                    <div className="activity-right">
+                      <small>{item.timestamp}</small>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       )}
@@ -498,10 +611,7 @@ export function UserView({
             </div>
             <label>
               Partner Gold Shop
-              <select
-                value={redeemShop}
-                onChange={event => setRedeemShop(event.target.value)}
-              >
+              <select value={redeemShop} onChange={event => setRedeemShop(event.target.value)}>
                 {approvedShops.map(shop => (
                   <option key={shop.id} value={shop.name}>
                     {shop.name} ({shop.location})
