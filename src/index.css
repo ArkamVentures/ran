@@ -1,0 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --ran-gold: #F8D56B;
+  --ran-bronze: #D49D67;
+  --ran-aura: #FFE5A9;
+  --ran-bg: #121214;
+  --ran-surface: #1E1E22;
+  --ran-text: #F5F5F7;
+  --ran-muted: #A1A1AA;
+  --ran-dark-text: #121214;
+  --sans: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+
+  font-family: var(--sans);
+  color: var(--ran-text);
+  background: var(--ran-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--ran-bg);
+}
+
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+h1, h2, h3, p { color: inherit; }

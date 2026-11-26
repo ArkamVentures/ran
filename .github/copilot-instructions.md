@@ -1,0 +1,4 @@
+- Build and maintain the Ran React + TypeScript interface with the existing pastel design system.
+- Keep the user app, WordPress-style admin, and gold shop portal responsive.
+- Use the ran project palette and Plus Jakarta Sans typography.
+- Run npm run build before completing changes.

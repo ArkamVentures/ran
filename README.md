@@ -3,7 +3,7 @@
 A responsive React + TypeScript interface for Ran with two product surfaces:
 
 - User micro-gold wallet and shop offers
-- WordPress-style admin dashboard
+
 
 ## Run locally
 
