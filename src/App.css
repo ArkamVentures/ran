@@ -1476,3 +1476,86 @@ tbody tr:hover { background:#29292E; }
   padding-left: 12px;
   color: #D49D67;
 }
+
+.user-picker-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.user-picker {
+  height: 38px;
+  max-width: 190px;
+  padding: 0 10px;
+  border: 1px solid #3A3A40;
+  border-radius: 10px;
+  background: #1E1E22;
+  color: #F5F5F7;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  outline: 0;
+}
+.user-picker:focus {
+  border-color: #F8D56B;
+}
+.add-user-pill {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid rgba(248, 213, 107, 0.35);
+  border-radius: 10px;
+  background: rgba(248, 213, 107, 0.12);
+  color: #F8D56B;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.add-user-pill:hover {
+  background: #F8D56B;
+  color: #121214;
+}
+
+.login-mode-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.login-mode-row button {
+  border: 0;
+  background: transparent;
+  padding: 0 0 4px;
+  color: #A1A1AA;
+  font-size: 11px;
+  font-weight: 800;
+  border-bottom: 2px solid transparent;
+}
+.login-mode-row button.active {
+  color: #F8D56B;
+  border-bottom-color: #F8D56B;
+}
+
+.demo-user-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.demo-user-chips button {
+  border: 1px solid #3A3A40;
+  border-radius: 999px;
+  background: #1E1E22;
+  color: #A1A1AA;
+  padding: 5px 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.demo-user-chips button.active {
+  border-color: #F8D56B;
+  background: rgba(248, 213, 107, 0.14);
+  color: #F8D56B;
+}
+
+@media (max-width: 600px) {
+  .user-picker {
+    max-width: 130px;
+  }
+}

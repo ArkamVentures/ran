@@ -41,6 +41,7 @@ export function AdminView({
   onApproveAllPending,
   onToggleUserStatus,
   onAddUser,
+  onSwitchToUser,
   onToggleShopStatus,
   onAddShop,
   onUpdateSettings,
@@ -454,7 +455,7 @@ export function AdminView({
                     <tr key={user.id}>
                       <td>
                         <b>{user.name}</b>
-                        {user.isCurrentUser && <span className="you-pill">Demo user</span>}
+                        {user.id === state.currentUserId && <span className="you-pill">Active view</span>}
                       </td>
                       <td>{user.email}</td>
                       <td>
@@ -467,7 +468,14 @@ export function AdminView({
                           {user.status}
                         </span>
                       </td>
-                      <td>
+                      <td className="action-cell">
+                        <button
+                          type="button"
+                          className="approve"
+                          onClick={() => onSwitchToUser(user.id)}
+                        >
+                          Open Wallet
+                        </button>
                         <button
                           type="button"
                           className={user.status === 'Active' ? 'suspend-btn' : 'approve'}
